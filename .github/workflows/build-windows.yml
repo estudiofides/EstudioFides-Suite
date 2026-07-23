@@ -1,0 +1,47 @@
+name: Empaquetar EstudioFides.exe
+
+# Se dispara solo cuando se publica un tag de version (ej. "v1.1").
+# Compila en un Windows real (provisto por GitHub, gratis), y deja el
+# .exe listo como "Release" para descargar -- no hace falta ninguna
+# PC de Windows propia para este paso.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Escribir VERSION.txt a partir del tag
+        shell: bash
+        run: |
+          VERSION_NUM="${GITHUB_REF_NAME#v}"
+          FECHA=$(date +%d/%m/%Y)
+          echo "$VERSION_NUM - $FECHA" > VERSION.txt
+
+      - name: Empaquetar con PyInstaller
+        run: >
+          pyinstaller --name EstudioFides --onefile --windowed
+          --paths organizador_clientes --paths herramientas hub_app.py
+
+      - name: Publicar Release con el .exe adjunto
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/EstudioFides.exe

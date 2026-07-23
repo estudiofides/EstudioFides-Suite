@@ -1,0 +1,28 @@
+# Estudio Fides - Suite de Herramientas
+# Instalar todo con: pip install -r requirements.txt
+# (En Windows puede ser "pip" o "py -m pip"; en Mac, "pip3". Ver README.md)
+
+# Excel (fichas de cliente, SISFE, Base de expedientes)
+openpyxl
+
+# PDF (lectura, extracción de texto, herramientas de PDF)
+pypdf
+PyPDF2
+
+# Word (cartas documento, telegramas, escritos, ficha de expediente)
+python-docx
+
+# OCR de respaldo para PDFs escaneados sin texto, y para el Transcriptor
+# (además necesitan el programa Tesseract instalado aparte -- no es un
+# paquete de Python, ver README.md)
+Pillow
+pytesseract
+pymupdf
+
+# Papelera del sistema en vez de borrado directo (botón "Eliminar" en
+# Ordenar Expediente, Carpetas Vacías, Limpiar Documentos). Opcional:
+# si no está instalado, esos botones simplemente no aparecen.
+send2trash
+
+# Lectura de PDFs protegidos/encriptados (lo usa pypdf internamente)
+cryptography

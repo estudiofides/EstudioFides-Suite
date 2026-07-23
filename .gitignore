@@ -1,0 +1,22 @@
+# Bases de datos y cachés: tienen nombres reales de clientes adentro.
+# El repositorio es PUBLICO -- esto NUNCA se sube.
+database/
+organizador_clientes/database/
+*.db
+
+# Configuración específica de cada computadora (ruta del Drive local).
+ruta_estudio.txt
+
+# Generados por PyInstaller al empaquetar (quedan en dist/EstudioFides.exe,
+# no hace falta versionarlos -- GitHub Actions los genera de nuevo solo).
+build/
+dist/
+*.spec
+
+# Basura de Python / del sistema operativo
+__pycache__/
+*.pyc
+.DS_Store
+
+# Se regenera en cada corrida, no hace falta versionarlo
+resultado.xlsx
