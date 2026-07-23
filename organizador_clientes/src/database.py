@@ -1,12 +1,17 @@
 import sqlite3
 from pathlib import Path
 
-# Ancla a la carpeta del proyecto (donde está hub_app.py), no a la
-# carpeta desde la que se haya lanzado el programa -- si dependiera del
-# directorio de trabajo, abrir la app con un acceso directo/ícono (en
-# vez de "cd" + Terminal) podía terminar creando una base nueva vacía
-# en otro lado.
-DB = Path(__file__).resolve().parent.parent.parent / "database" / "organizador.db"
+from src.rutas import raiz_app
+from src.config import CARPETA_SISTEMA
+
+# Ancla a la carpeta real del programa (al lado del .exe si está
+# empaquetado, o de hub_app.py si corre desde el código -- ver
+# src/rutas.py), no a la carpeta desde la que se haya lanzado ni a
+# dónde PyInstaller extraiga los archivos en --onefile (esa es
+# temporal y se borra en cada corrida). Este es el CACHÉ de archivos
+# ya analizados: vive LOCAL en cada computadora a propósito (no hace
+# falta compartirlo entre máquinas, cada una puede rearmar el suyo).
+DB = raiz_app() / "database" / "organizador.db"
 
 
 def conectar():
@@ -89,6 +94,46 @@ def conectar():
         origen TEXT,
         destino TEXT,
         fecha TEXT
+    )
+    """)
+
+    conn.commit()
+
+    return conn
+
+
+def conectar_vencimientos():
+    """
+    Conexión SEPARADA para los vencimientos (pestana_vencimientos.py):
+    a diferencia del caché de archivos, esto es información real que
+    tiene que verse igual desde cualquier computadora del estudio --
+    por eso el archivo vive DENTRO del Drive (src.config.
+    CARPETA_SISTEMA), y Google Drive lo sincroniza solo entre todas
+    las máquinas, sin necesidad de ningún servidor propio.
+
+    (Riesgo a tener en cuenta: si dos personas guardan un cambio en el
+    MISMO instante, exacto, desde dos computadoras distintas, Google
+    Drive puede llegar a generar una "copia en conflicto" en vez de
+    combinar los cambios -- poco probable con el uso normal de esto
+    (anotar un vencimiento de vez en cuando), pero no imposible. Si
+    alguna vez aparece un archivo llamado algo como
+    "vencimientos (conflicto de la MacBook Pro de Leandro).db" al
+    lado del original, avisar para revisarlo a mano.)
+    """
+    ruta = CARPETA_SISTEMA / "vencimientos.db"
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+
+    conn = sqlite3.connect(ruta)
+
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS vencimientos(
+        id INTEGER PRIMARY KEY,
+        cliente TEXT,
+        descripcion TEXT,
+        fecha TEXT,
+        prioridad TEXT,
+        hecho INTEGER DEFAULT 0,
+        creado TEXT
     )
     """)
 

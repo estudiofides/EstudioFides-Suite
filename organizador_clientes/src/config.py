@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from src.rutas import raiz_app
+
 # ============================================================
 # RUTA PRINCIPAL
 # ============================================================
@@ -24,7 +26,7 @@ from pathlib import Path
 # una sola constante para no repetirlo en cada candidato.
 # ============================================================
 
-RAIZ_PROYECTO = Path(__file__).resolve().parent.parent.parent
+RAIZ_PROYECTO = raiz_app()
 ARCHIVO_RUTA_ESTUDIO = RAIZ_PROYECTO / "ruta_estudio.txt"
 
 NOMBRE_CARPETA_DRIVE = Path("Mi unidad") / "NUBE ESTUDIO FIDES"
@@ -98,6 +100,13 @@ CARPETA_ORDENAR_SUELTOS = ESTUDIO / "ORDENAR SUELTOS"
 CARPETA_ARCHIVOS_CORRUPTOS = ESTUDIO / "ARCHIVOS CORRUPTOS"
 CARPETA_SIN_PODER_ABRIR = ESTUDIO / "ARCHIVOS SIN PODER ABRIR"
 
+# Carpeta de datos "del sistema" (no de un cliente): ahí vive
+# vencimientos.db (pestana_vencimientos.py). Va DENTRO del Drive a
+# propósito, para que Google Drive la sincronice sola entre todas las
+# computadoras del estudio -- si Cecilia anota un vencimiento en la
+# suya, Leandro lo tiene que ver en la de él sin hacer nada especial.
+CARPETA_SISTEMA = ESTUDIO / "_Sistema"
+
 # ============================================================
 # CIUDADES
 # ============================================================
@@ -129,6 +138,7 @@ CARPETAS_EXCLUIDAS = {
     "MULTIPLES COINCIDENCIAS",
     "BORRAR DUPLICADOS",
     "ORDENAR SUELTOS",
+    "_Sistema",
     "ARCHIVOS CORRUPTOS",
     "ARCHIVOS SIN PODER ABRIR",
 }
@@ -151,6 +161,7 @@ RUTAS_EXCLUIDAS = {
     ESTUDIO / "OTROS" / "INCREMENTAL PUERTO",
     ESTUDIO / "OTROS" / "ESTUDIO COLON",
     CARPETA_ORDENAR_SUELTOS,
+    CARPETA_SISTEMA,
     CARPETA_ARCHIVOS_CORRUPTOS,
     CARPETA_SIN_PODER_ABRIR,
 }

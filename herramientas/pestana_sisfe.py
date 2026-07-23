@@ -14,6 +14,7 @@ from openpyxl import Workbook, load_workbook
 
 from src.tooltip import agregar_tooltip
 from src.config import CIUDADES
+from src.rutas import raiz_app
 
 
 COLUMNAS = ["Carátula", "Expte/CUIJ", "Juzgado", "Inicio", "Ultima_Act"]
@@ -154,7 +155,12 @@ def construir_pestana(parent):
 
     ttk.Label(frame_excel, text="Base Excel:").pack(side=tk.LEFT)
     entry_excel = tk.Entry(frame_excel, width=48)
-    entry_excel.insert(0, os.path.join(os.getcwd(), "Base_Expedientes_SISFE.xlsx"))
+    # raiz_app() en vez de os.getcwd(): con el directorio de trabajo,
+    # el valor por defecto podía cambiar según desde dónde se abriera
+    # el programa (ícono, acceso directo, .exe), pareciendo que se
+    # "perdía" la base de un uso al siguiente si nunca se tocaba este
+    # campo a mano.
+    entry_excel.insert(0, str(raiz_app() / "Base_Expedientes_SISFE.xlsx"))
     entry_excel.pack(side=tk.LEFT, padx=8)
 
     def elegir_excel():

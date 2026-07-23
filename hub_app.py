@@ -10,7 +10,8 @@ se abre nada aparte):
      (src/jus.py, se trae de Caja Forense y se guarda en caché por si
      un día no hay conexión).
 
-  2) Menú: "Bienvenido/a, <usuario>" + las 5 categorías de trabajo.
+  2) Menú: "Bienvenido/a, <usuario>" + aviso de vencimientos próximos
+     (si hay) + las categorías de trabajo.
 
   3) Categoría: las pestañas de herramientas que corresponden a la
      categoría elegida (reusan exactamente las mismas pestana_*.py de
@@ -42,6 +43,8 @@ from pestana_alta_cliente import construir_pestana as pestana_alta_cliente   # n
 from pestana_carpetas_vacias import construir_pestana as pestana_carpetas_vacias  # noqa: E402
 from pestana_panel import construir_pestana as pestana_panel                 # noqa: E402
 from pestana_buscar import construir_pestana as pestana_buscar               # noqa: E402
+from pestana_vencimientos import construir_pestana as pestana_vencimientos   # noqa: E402
+from pestana_vencimientos import _contar_proximos                            # noqa: E402
 from pestana_limpiar import construir_pestana as pestana_limpiar             # noqa: E402
 from pestana_pdf import construir_pestana as pestana_pdf                     # noqa: E402
 from pestana_transcriptor import construir_pestana as pestana_transcriptor   # noqa: E402
@@ -50,6 +53,7 @@ from pestana_sisfe import construir_pestana as pestana_sisfe                 # n
 
 from src.jus import obtener_valor_jus                                        # noqa: E402
 from src.actualizaciones import buscar_actualizacion                         # noqa: E402
+from src.rutas import leer_texto_version                                     # noqa: E402
 
 USUARIOS = ["Cecilia", "Leandro", "Micaela", "Viviana"]
 
@@ -63,6 +67,9 @@ MESES = [
 # Cambiar el orden o el contenido de esto alcanza para reorganizar el
 # menú; no hace falta tocar ninguna pestana_*.py.
 CATEGORIAS = [
+    ("Vencimientos", [
+        ("Vencimientos", pestana_vencimientos),
+    ]),
     ("Buscar", [
         ("Buscar", pestana_buscar),
     ]),
@@ -95,14 +102,12 @@ def _fecha_larga(hoy=None):
 
 
 def _leer_version():
-    """Lee VERSION.txt (al lado de este archivo) para mostrar abajo de
-    todo qué versión es esta -- sirve para darse cuenta si una PC con
-    el .exe empaquetado quedó desactualizada respecto de las demás
-    (ver README_ESTUDIO_FIDES.txt, sección 10)."""
-    try:
-        return (RAIZ / "VERSION.txt").read_text(encoding="utf-8").strip()
-    except OSError:
-        return "sin versión"
+    """Qué versión es esta, para mostrar abajo de todo -- sirve para
+    darse cuenta si una PC con el .exe empaquetado quedó desactualizada
+    respecto de las demás (ver README_ESTUDIO_FIDES.txt, sección 10).
+    src.rutas.leer_texto_version() ya sabe leer esto tanto corriendo
+    desde el código como empaquetado con PyInstaller."""
+    return leer_texto_version() or "sin versión"
 
 
 class App:
@@ -241,7 +246,23 @@ class App:
         marco.pack(expand=True)
 
         ttk.Label(marco, text=f"Bienvenido/a, {self.usuario}", font=("Arial", 18, "bold")).pack(pady=(0, 6))
-        ttk.Label(marco, text="¿Qué deseas hacer?", font=("Arial", 13)).pack(pady=(0, 28))
+        ttk.Label(marco, text="¿Qué deseas hacer?", font=("Arial", 13)).pack(pady=(0, 12))
+
+        vencidos, por_vencer = _contar_proximos()
+        if vencidos or por_vencer:
+            partes = []
+            if vencidos:
+                partes.append(f"{vencidos} vencido(s)")
+            if por_vencer:
+                partes.append(f"{por_vencer} por vencer esta semana")
+            aviso = ttk.Label(
+                marco, text=f"⚠ Vencimientos: {' y '.join(partes)} -- click para ver",
+                foreground="#cf222e", cursor="hand2", font=("Arial", 11, "bold"),
+            )
+            aviso.pack(pady=(0, 16))
+            aviso.bind("<Button-1>", lambda e: self.mostrar_categoria("Vencimientos"))
+        else:
+            ttk.Label(marco, text="", font=("Arial", 11)).pack(pady=(0, 16))
 
         for nombre_categoria, _tabs in CATEGORIAS:
             ttk.Button(

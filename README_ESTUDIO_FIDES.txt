@@ -34,8 +34,9 @@ EstudioFides-Suite/
     ├── pestana_ordenar_expediente.py   Ordenar Expediente (analizar una carpeta puntual)
     ├── pestana_alta_cliente.py         Alta de Cliente/Expediente, Editar cliente, Accesos directos
     ├── pestana_carpetas_vacias.py      Detectar y borrar carpetas vacías
-    ├── pestana_panel.py                Panel de Estado (buscar/renombrar/abrir cliente)
+    ├── pestana_panel.py                Panel de Estado (buscar/renombrar/abrir cliente, estado de ficha)
     ├── pestana_buscar.py               Buscador de clientes, expedientes y archivos
+    ├── pestana_vencimientos.py         Agenda simple de plazos (cliente, fecha, prioridad)
     │
     └── src/                             Lógica interna (sin interfaz propia)
         ├── config.py                     Rutas y listas fijas (ciudades, carpetas especiales)
@@ -186,13 +187,32 @@ Quedaron en el repositorio pero no se usan desde hub_app.py:
 
 8) QUÉ SE CREA SOLO (no hay que tocarlo a mano)
 ------------------------------------------------------------
-- database/organizador.db -- caché de archivos ya analizados,
-  para no reprocesar todo cada vez.
-- organizador_clientes/database/jus_cache.json -- último valor
-  de la Unidad JUS conocido, por si un día falla la conexión a
-  Caja Forense.
+- database/organizador.db -- caché de archivos ya analizados, para
+  no reprocesar todo cada vez. Este es LOCAL de cada computadora
+  (no se comparte entre máquinas): no hace falta que lo sea, cada
+  una puede rearmar el suyo escaneando de nuevo si hiciera falta.
+- database/jus_cache.json -- último valor de
+  la Unidad JUS conocido, por si un día falla la conexión a Caja
+  Forense.
 - La ficha Excel de cada cliente (Ficha_<nombre>.xlsx), dentro de
   la carpeta de cada cliente en el Drive.
+- NUBE ESTUDIO FIDES/_Sistema/vencimientos.db -- los vencimientos
+  anotados en la pestaña "Vencimientos". A diferencia del caché de
+  archivos, este SÍ vive DENTRO del Drive a propósito, para que
+  Google Drive lo sincronice solo entre todas las computadoras: lo
+  que anota una persona, lo ve cualquier otra sin hacer nada
+  especial (no hace falta ni git push ni ninguna release para
+  esto, es completamente independiente de las actualizaciones del
+  programa). Riesgo a tener en cuenta, poco probable con el uso
+  normal: si dos personas guardan un cambio ahí en el mismo
+  instante exacto desde dos computadoras distintas, Google Drive
+  puede llegar a crear una "copia en conflicto" en vez de combinar
+  los cambios -- si alguna vez aparece un archivo con un nombre
+  raro al lado de "vencimientos.db" (tipo "vencimientos (copia en
+  conflicto).db"), avisar para revisarlo a mano. La carpeta
+  "_Sistema" está excluida de los escaneos de archivos sueltos,
+  así que el Organizador nunca la va a tocar ni a intentar
+  "ordenarla".
 
 
 9) INSTALAR SIN TERMINAL EN LAS DEMAS COMPUTADORAS (.exe)

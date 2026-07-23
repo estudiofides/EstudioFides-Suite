@@ -33,7 +33,19 @@ from datetime import date
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 
-CAMPOS = ["Apellido y Nombre", "Dirección", "Teléfono", "Email", "Ciudad", "Notas"]
+CAMPOS = ["Apellido y Nombre", "Dirección", "Teléfono", "Email", "Ciudad", "Notas", "DNI/CUIT"]
+
+# Campos que alcanzan como mínimo para considerar la ficha "completa"
+# (además de Apellido y Nombre, que siempre es obligatorio): con al
+# menos uno de estos, el cliente es contactable. Se usa en
+# estado_ficha() -- ver Panel de Estado.
+CAMPOS_CONTACTO = ["Dirección", "Teléfono", "Email"]
+
+# IMPORTANTE: los campos nuevos SIEMPRE se agregan al FINAL de esta
+# lista, nunca en el medio -- leer_ficha() lee cada campo por su
+# posición (fila = _FILA_CAMPOS_DESDE + índice), así que insertar uno
+# en el medio correría todos los que vienen después y desalinearía la
+# lectura de fichas ya guardadas con el orden viejo.
 
 _FILA_CAMPOS_DESDE = 4
 _FILA_SECCION_EXPEDIENTES = _FILA_CAMPOS_DESDE + len(CAMPOS) + 1   # 11
@@ -50,6 +62,21 @@ _FUENTE_ETIQUETA = Font(bold=True)
 def ruta_ficha(carpeta_cliente):
     """Ruta donde vive (o viviría) la ficha de este cliente."""
     return carpeta_cliente / f"Ficha_{carpeta_cliente.name}.xlsx"
+
+
+def _fila_seccion_expedientes(ws):
+    """Busca en QUÉ fila está realmente el encabezado "EXPEDIENTES" en
+    esta hoja puntual, en vez de asumir un número fijo -- así, si
+    CAMPOS crece en el futuro, una ficha vieja (guardada con menos
+    campos) sigue leyendo bien sus expedientes, en vez de desalinearse.
+    Devuelve None si no se encuentra (archivo corrupto/inesperado)."""
+    fila = _FILA_CAMPOS_DESDE
+    limite = _FILA_CAMPOS_DESDE + len(CAMPOS) + 50  # margen de sobra
+    while fila < limite:
+        if ws.cell(row=fila, column=1).value == "EXPEDIENTES":
+            return fila
+        fila += 1
+    return None
 
 
 def leer_ficha(carpeta_cliente):
@@ -75,19 +102,48 @@ def leer_ficha(carpeta_cliente):
         datos[campo] = valor if valor is not None else ""
 
     expedientes = []
-    fila = _FILA_EXPEDIENTES_DESDE
-    while True:
-        nombre = ws.cell(row=fila, column=1).value
-        if not nombre:
-            break
-        expedientes.append({
-            "nombre": nombre,
-            "cuij": ws.cell(row=fila, column=2).value or "",
-            "fecha_alta": ws.cell(row=fila, column=3).value or "",
-        })
-        fila += 1
+    fila_seccion = _fila_seccion_expedientes(ws)
+    if fila_seccion is not None:
+        fila = fila_seccion + 2  # +1 encabezados de tabla, +1 primera fila de datos
+        while True:
+            nombre = ws.cell(row=fila, column=1).value
+            if not nombre:
+                break
+            expedientes.append({
+                "nombre": nombre,
+                "cuij": ws.cell(row=fila, column=2).value or "",
+                "fecha_alta": ws.cell(row=fila, column=3).value or "",
+            })
+            fila += 1
 
     return {"datos": datos, "expedientes": expedientes}
+
+
+def estado_ficha(carpeta_cliente):
+    """
+    Devuelve "sin_ficha", "incompleta", o "completa":
+
+      - "sin_ficha": el cliente todavía no tiene ninguna ficha creada.
+      - "incompleta": tiene ficha, pero le falta el nombre, o no tiene
+        NINGÚN dato de contacto (ni dirección, ni teléfono, ni email).
+      - "completa": tiene nombre y al menos un dato de contacto.
+
+    Se usa en Panel de Estado para el resumen de "cuántos clientes
+    tienen la ficha completa" (ver README).
+    """
+    ficha = leer_ficha(carpeta_cliente)
+    if not ficha:
+        return "sin_ficha"
+
+    datos = ficha["datos"]
+
+    if not (datos.get("Apellido y Nombre") or "").strip():
+        return "incompleta"
+
+    if not any((datos.get(campo) or "").strip() for campo in CAMPOS_CONTACTO):
+        return "incompleta"
+
+    return "completa"
 
 
 def guardar_ficha(carpeta_cliente, datos, expedientes_nuevos=None):

@@ -45,7 +45,8 @@ jobs:
       - name: Empaquetar con PyInstaller
         run: >
           pyinstaller --name EstudioFides --onefile --windowed
-          --paths organizador_clientes --paths herramientas hub_app.py
+          --paths organizador_clientes --paths herramientas
+          --add-data "VERSION.txt;." hub_app.py
 
       - name: Publicar Release con el .exe adjunto
         uses: softprops/action-gh-release@v2

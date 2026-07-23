@@ -4,7 +4,9 @@ Misma lógica de herramientas/generador_legal.py. El original era una
 clase que heredaba de tk.Tk (una ventana propia); acá hereda de
 tk.Frame para poder vivir embebida dentro de una pestaña.
 """
+import threading
 import tkinter as tk
+from pathlib import Path
 from tkinter import ttk, filedialog, messagebox
 from docx import Document
 from docx.shared import Pt, Inches
@@ -12,6 +14,8 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from datetime import datetime
 
 from src.tooltip import agregar_tooltip
+from src.clientes import obtener_clientes
+from src.ficha_cliente import leer_ficha
 
 # ------------------------------------------------------------------
 # Membrete (encabezado) y tamaño de hoja. Esto es a propósito lo único
@@ -49,6 +53,32 @@ def _agregar_membrete(doc):
     p_detalle.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run_detalle = p_detalle.add_run(MEMBRETE_DETALLE)
     run_detalle.font.size = Pt(9)
+
+
+# Para el botón "Completar con datos de un cliente": por cada
+# plantilla, qué campo(s) representan a "una persona" -- ahí puede ir
+# el cliente elegido en el buscador. Cada rol dice en qué campo va el
+# nombre, y opcionalmente en qué otro campo van el DNI/CUIT y el
+# domicilio (si la plantilla los tiene por separado). Cuando no hay un
+# campo de DNI separado pero el campo de nombre dice "y DNI" en su
+# etiqueta, se pega el DNI al final del nombre (combinar_dni_en_nombre).
+ROLES_PLANTILLA = {
+    "Carta Documento (Intimación)": [
+        {"campo_nombre": "Remitente (Nombre y DNI)", "combinar_dni_en_nombre": True},
+        {"campo_nombre": "Destinatario", "campo_domicilio": "Domicilio Destinatario"},
+    ],
+    "Telegrama Laboral": [
+        {"campo_nombre": "Remitente", "campo_dni": "CUIL Remitente"},
+        {"campo_nombre": "Destinatario (Empleador)", "campo_domicilio": "Domicilio Laboral"},
+    ],
+    "Escrito: Conformidad (Sucesión)": [
+        {"campo_nombre": "Nombre del Cliente", "campo_dni": "DNI/CUIT del Cliente"},
+    ],
+    "Contrato de Locación": [
+        {"campo_nombre": "Propietario", "campo_dni": "DNI Propietario"},
+        {"campo_nombre": "Inquilino", "campo_dni": "DNI Inquilino"},
+    ],
+}
 
 
 PLANTILLAS = {
@@ -152,6 +182,9 @@ class _PestanaGenerador(tk.Frame):
     def __init__(self, parent):
         super().__init__(parent)
 
+        self._clientes = []
+        self._roles_actuales = []
+
         ttk.Label(self, text="⚖️ Redacción Automatizada de Documentos", font=("Arial", 14, "bold")).pack(pady=(15, 10))
 
         marco_selector = tk.Frame(self)
@@ -164,6 +197,46 @@ class _PestanaGenerador(tk.Frame):
         agregar_tooltip(self.combo_tipo, "Elegí qué tipo de documento generar; abajo aparecen los "
                                            "campos que hacen falta completar para esa plantilla.")
 
+        # ---------------- autocompletar con un cliente existente ----------------
+
+        self.marco_autocompletar = ttk.LabelFrame(self, text="Autocompletar con un cliente (opcional)", padding=10)
+        self.marco_autocompletar.pack(fill=tk.X, padx=30, pady=(0, 10))
+
+        fila_ac = ttk.Frame(self.marco_autocompletar)
+        fila_ac.pack(fill=tk.X)
+
+        ttk.Label(fila_ac, text="Buscar cliente:").pack(side=tk.LEFT, padx=(0, 8))
+        self.entry_buscar_cliente = tk.Entry(fila_ac, width=28)
+        self.entry_buscar_cliente.pack(side=tk.LEFT, padx=(0, 8))
+        self.entry_buscar_cliente.bind("<KeyRelease>", lambda e: self._renderizar_clientes())
+        agregar_tooltip(self.entry_buscar_cliente, "Filtra la lista de abajo en vivo, por nombre de cliente.")
+
+        self.btn_refrescar_clientes = ttk.Button(fila_ac, text="Actualizar lista", command=self._cargar_clientes)
+        self.btn_refrescar_clientes.pack(side=tk.LEFT)
+
+        ttk.Label(fila_ac, text="Rol en el documento:").pack(side=tk.LEFT, padx=(15, 8))
+        self.combo_rol = ttk.Combobox(fila_ac, width=28, state="readonly")
+        self.combo_rol.pack(side=tk.LEFT, padx=(0, 8))
+        agregar_tooltip(self.combo_rol, "En qué campo del documento va este cliente (ej. remitente, "
+                                          "destinatario, propietario, inquilino).")
+
+        self.btn_completar_cliente = ttk.Button(fila_ac, text="Completar campos", command=self._completar_con_cliente)
+        self.btn_completar_cliente.pack(side=tk.LEFT)
+        agregar_tooltip(self.btn_completar_cliente, "Copia el nombre (y DNI/domicilio si la ficha los "
+                                                       "tiene) del cliente seleccionado al campo del rol "
+                                                       "elegido arriba. El resto de los campos hay que "
+                                                       "completarlos igual a mano.")
+
+        self.tabla_clientes = ttk.Treeview(
+            self.marco_autocompletar, columns=("cliente", "ciudad"), show="headings", height=4,
+        )
+        self.tabla_clientes.heading("cliente", text="Cliente")
+        self.tabla_clientes.heading("ciudad", text="Ciudad")
+        self.tabla_clientes.column("cliente", width=340, anchor="w")
+        self.tabla_clientes.column("ciudad", width=150, anchor="w")
+        self.tabla_clientes.pack(fill=tk.X, pady=(8, 0))
+        agregar_tooltip(self.tabla_clientes, "Elegí el cliente que va a ir en el rol seleccionado arriba.")
+
         self.marco_formulario = tk.Frame(self, padx=20, pady=20)
         self.marco_formulario.pack(fill=tk.BOTH, expand=True, padx=30, pady=10)
 
@@ -173,6 +246,78 @@ class _PestanaGenerador(tk.Frame):
         agregar_tooltip(self.btn_generar, "Genera el documento Word con los datos que completaste y "
                                             "te pregunta dónde guardarlo.")
 
+        self._cargar_clientes()
+
+    # ---------------- autocompletar con un cliente existente ----------------
+
+    def _cargar_clientes(self):
+        self.btn_refrescar_clientes.config(state=tk.DISABLED)
+
+        def trabajo():
+            _, _, carpetas_clientes = obtener_clientes()
+
+            def terminar():
+                self._clientes = sorted(carpetas_clientes, key=lambda p: p.name.lower())
+                self._renderizar_clientes()
+                self.btn_refrescar_clientes.config(state=tk.NORMAL)
+
+            self.after(0, terminar)
+
+        threading.Thread(target=trabajo, daemon=True).start()
+
+    def _renderizar_clientes(self):
+        self.tabla_clientes.delete(*self.tabla_clientes.get_children())
+        filtro = self.entry_buscar_cliente.get().strip().lower()
+        for carpeta in self._clientes:
+            if filtro and filtro not in carpeta.name.lower():
+                continue
+            self.tabla_clientes.insert("", tk.END, values=(carpeta.name, carpeta.parent.name), iid=str(carpeta))
+
+    def _completar_con_cliente(self):
+        seleccion = self.tabla_clientes.selection()
+        if not seleccion:
+            messagebox.showinfo("Nada seleccionado", "Elegí un cliente de la lista primero.")
+            return
+
+        rol_elegido = self.combo_rol.get()
+        rol = next((r for r in self._roles_actuales if r["campo_nombre"] == rol_elegido), None)
+        if not rol:
+            messagebox.showinfo("Elegí un rol", "Elegí en qué campo del documento va este cliente.")
+            return
+
+        carpeta_cliente = Path(seleccion[0])
+        ficha = leer_ficha(carpeta_cliente)
+        datos = ficha["datos"] if ficha else {}
+
+        nombre = (datos.get("Apellido y Nombre") or carpeta_cliente.name).strip()
+        dni = (datos.get("DNI/CUIT") or "").strip()
+        domicilio = (datos.get("Dirección") or "").strip()
+
+        if rol.get("combinar_dni_en_nombre") and dni:
+            nombre = f"{nombre} - DNI {dni}"
+
+        def poner_valor(campo, valor):
+            widget = self.campos_entry.get(campo)
+            if widget is None or not valor:
+                return
+            if isinstance(widget, tk.Text):
+                widget.delete("1.0", tk.END)
+                widget.insert("1.0", valor)
+            else:
+                widget.delete(0, tk.END)
+                widget.insert(0, valor)
+
+        poner_valor(rol["campo_nombre"], nombre)
+        poner_valor(rol.get("campo_dni"), dni)
+        poner_valor(rol.get("campo_domicilio"), domicilio)
+
+        if not ficha:
+            messagebox.showinfo(
+                "Cliente sin ficha",
+                f"'{carpeta_cliente.name}' todavía no tiene ficha guardada -- se completó solo el "
+                f"nombre (de la carpeta). El resto hay que completarlo a mano."
+            )
+
     def actualizar_formulario(self, event=None):
         for widget in self.marco_formulario.winfo_children():
             widget.destroy()
@@ -180,6 +325,10 @@ class _PestanaGenerador(tk.Frame):
 
         tipo_seleccionado = self.combo_tipo.get()
         campos_necesarios = PLANTILLAS[tipo_seleccionado]
+
+        self._roles_actuales = ROLES_PLANTILLA.get(tipo_seleccionado, [])
+        self.combo_rol.config(values=[r["campo_nombre"] for r in self._roles_actuales])
+        self.combo_rol.set("")
 
         ttk.Label(self.marco_formulario, text="2. Complete los datos para la plantilla:", font=("Arial", 12, "bold")).grid(
             row=0, column=0, columnspan=2, pady=(0, 15), sticky="w"

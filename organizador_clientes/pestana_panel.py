@@ -27,6 +27,13 @@ from src.clientes import obtener_clientes
 from src.database import conectar
 from src.tooltip import agregar_tooltip
 from src.abrir import abrir
+from src.ficha_cliente import estado_ficha
+
+_TEXTO_ESTADO_FICHA = {
+    "completa": "✓ Completa",
+    "incompleta": "⚠ Incompleta",
+    "sin_ficha": "✗ Sin ficha",
+}
 
 
 def construir_pestana(parent):
@@ -38,7 +45,7 @@ def construir_pestana(parent):
     ttk.Label(frame, text="Panel de Estado", font=("Arial", 14, "bold")).pack(anchor="w")
     ttk.Label(
         frame,
-        text="Buscar y renombrar una carpeta de cliente.",
+        text="Buscar y renombrar una carpeta de cliente, y ver a quiénes les falta completar la ficha.",
         wraplength=900, justify="left",
     ).pack(anchor="w", pady=(0, 10))
 
@@ -51,9 +58,18 @@ def construir_pestana(parent):
     fila_buscar.pack(fill=tk.X, pady=(0, 8))
 
     ttk.Label(fila_buscar, text="Buscar cliente:").pack(side=tk.LEFT, padx=(0, 8))
-    entry_buscar = tk.Entry(fila_buscar, width=40)
+    entry_buscar = tk.Entry(fila_buscar, width=32)
     entry_buscar.pack(side=tk.LEFT, padx=(0, 8))
     agregar_tooltip(entry_buscar, "Filtra la lista de abajo en vivo, por nombre de cliente.")
+
+    var_solo_incompletas = tk.BooleanVar(value=False)
+    check_incompletas = ttk.Checkbutton(
+        fila_buscar, text="Solo incompletas o sin ficha", variable=var_solo_incompletas,
+        command=lambda: renderizar_clientes(),
+    )
+    check_incompletas.pack(side=tk.LEFT, padx=(0, 8))
+    agregar_tooltip(check_incompletas, "Muestra solo los clientes a los que les falta la ficha, o que "
+                                          "la tienen sin nombre o sin ningún dato de contacto.")
 
     etiqueta_estado_clientes = ttk.Label(fila_buscar, text="")
     etiqueta_estado_clientes.pack(side=tk.LEFT, padx=(10, 0))
@@ -61,12 +77,18 @@ def construir_pestana(parent):
     lista_contenedor = ttk.Frame(marco_clientes)
     lista_contenedor.pack(fill=tk.BOTH, expand=True)
 
-    columnas = ("cliente", "ciudad")
+    columnas = ("cliente", "ciudad", "ficha")
     tabla_clientes = ttk.Treeview(lista_contenedor, columns=columnas, show="headings", height=20)
     tabla_clientes.heading("cliente", text="Cliente")
     tabla_clientes.heading("ciudad", text="Ciudad")
-    tabla_clientes.column("cliente", width=380, anchor="w")
-    tabla_clientes.column("ciudad", width=160, anchor="w")
+    tabla_clientes.heading("ficha", text="Ficha")
+    tabla_clientes.column("cliente", width=340, anchor="w")
+    tabla_clientes.column("ciudad", width=150, anchor="w")
+    tabla_clientes.column("ficha", width=110, anchor="w")
+
+    tabla_clientes.tag_configure("completa", foreground="#1a7f37")
+    tabla_clientes.tag_configure("incompleta", foreground="#9a6700")
+    tabla_clientes.tag_configure("sin_ficha", foreground="#cf222e")
 
     scroll_clientes = ttk.Scrollbar(lista_contenedor, orient="vertical", command=tabla_clientes.yview)
     tabla_clientes.configure(yscrollcommand=scroll_clientes.set)
@@ -77,10 +99,16 @@ def construir_pestana(parent):
     def renderizar_clientes():
         tabla_clientes.delete(*tabla_clientes.get_children())
         filtro = entry_buscar.get().strip().lower()
-        for carpeta in estado["clientes"]:
+        solo_incompletas = var_solo_incompletas.get()
+        for carpeta, estado_f in estado["clientes"]:
             if filtro and filtro not in carpeta.name.lower():
                 continue
-            tabla_clientes.insert("", tk.END, values=(carpeta.name, carpeta.parent.name), iid=str(carpeta))
+            if solo_incompletas and estado_f == "completa":
+                continue
+            tabla_clientes.insert(
+                "", tk.END, values=(carpeta.name, carpeta.parent.name, _TEXTO_ESTADO_FICHA[estado_f]),
+                iid=str(carpeta), tags=(estado_f,),
+            )
 
     def cargar_clientes():
 
@@ -88,11 +116,16 @@ def construir_pestana(parent):
 
         def trabajo():
             _, _, carpetas_clientes = obtener_clientes()
+            carpetas_clientes = sorted(carpetas_clientes, key=lambda p: p.name.lower())
+            con_estado = [(carpeta, estado_ficha(carpeta)) for carpeta in carpetas_clientes]
 
             def terminar():
-                estado["clientes"] = sorted(carpetas_clientes, key=lambda p: p.name.lower())
+                estado["clientes"] = con_estado
                 renderizar_clientes()
-                etiqueta_estado_clientes.config(text=f"{len(estado['clientes']):,} clientes.")
+                completas = sum(1 for _, e in con_estado if e == "completa")
+                etiqueta_estado_clientes.config(
+                    text=f"{len(con_estado):,} clientes -- {completas:,} con ficha completa."
+                )
 
             frame.after(0, terminar)
 

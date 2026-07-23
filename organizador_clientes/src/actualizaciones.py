@@ -15,19 +15,14 @@ todavía no existe, o cambia de nombre, simplemente no avisa nada.
 """
 import json
 import urllib.request
-from pathlib import Path
+
+from src.rutas import leer_texto_version
 
 REPO_GITHUB = "estudiofides/EstudioFides-Suite"
 
-RAIZ_PROYECTO = Path(__file__).resolve().parent.parent.parent
-ARCHIVO_VERSION = RAIZ_PROYECTO / "VERSION.txt"
-
 
 def _version_local():
-    try:
-        return ARCHIVO_VERSION.read_text(encoding="utf-8").strip()
-    except OSError:
-        return ""
+    return leer_texto_version()
 
 
 def buscar_actualizacion(timeout=5):

@@ -14,7 +14,7 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python -m pip install pyinstaller
 
-python -m PyInstaller --name "EstudioFides" --onefile --windowed --paths organizador_clientes --paths herramientas hub_app.py
+python -m PyInstaller --name "EstudioFides" --onefile --windowed --paths organizador_clientes --paths herramientas --add-data "VERSION.txt;." hub_app.py
 
 echo.
 echo ============================================================

@@ -17,13 +17,19 @@ import re
 import ssl
 import urllib.request
 from datetime import date
-from pathlib import Path
+
+from src.rutas import raiz_app
 
 URL_JUS = "https://www.cajaforense.com/index.php?action=portal/show&ssnId_session=355&id_section=148&mnuId_parent=2"
 
 PATRON_JUS = re.compile(r"VALOR\s+de\s+la\s+UNIDAD\s+JUS\s+ARANCELARIA:\s*\$\s*([\d\.,]+)", re.IGNORECASE)
 
-RUTA_CACHE = Path(__file__).resolve().parent.parent / "database" / "jus_cache.json"
+# raiz_app() (src/rutas.py) para que esto funcione igual corriendo
+# desde el código que empaquetado en el .exe -- Path(__file__) a
+# secas, en el .exe, apuntaría a la carpeta temporal donde PyInstaller
+# extrae los archivos (distinta y borrada en cada corrida), perdiendo
+# el caché entre una apertura del programa y la siguiente.
+RUTA_CACHE = raiz_app() / "database" / "jus_cache.json"
 
 
 def _leer_cache():
